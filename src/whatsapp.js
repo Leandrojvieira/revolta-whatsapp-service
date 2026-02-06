@@ -1,58 +1,62 @@
-import makeWASocket, {
+const {
+  default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason
-} from '@whiskeysockets/baileys'
-import qrcode from 'qrcode'
+} = require('@whiskeysockets/baileys');
 
-let sock
-let qrCode = null
-let isConnected = false
+let sock;
+let qrCode = null;
+let connectionStatus = 'disconnected';
 
-export async function startWhatsApp() {
-  const { state, saveCreds } = await useMultiFileAuthState('./src/store/auth_info')
+async function startWhatsApp() {
+  const { state, saveCreds } = await useMultiFileAuthState('auth');
 
   sock = makeWASocket({
     auth: state,
-    printQRInTerminal: true
-  })
+    printQRInTerminal: false
+  });
 
-  sock.ev.on('creds.update', saveCreds)
-
-  sock.ev.on('connection.update', async (update) => {
-    const { connection, qr, lastDisconnect } = update
+  sock.ev.on('connection.update', (update) => {
+    const { connection, qr, lastDisconnect } = update;
 
     if (qr) {
-      qrCode = await qrcode.toDataURL(qr)
-      isConnected = false
-      console.log('[WA] QR Code gerado')
+      qrCode = qr;
+      connectionStatus = 'qr';
+      console.log('📸 QR Code gerado');
     }
 
     if (connection === 'open') {
-      qrCode = null
-      isConnected = true
-      console.log('[WA] WhatsApp conectado')
+      qrCode = null;
+      connectionStatus = 'connected';
+      console.log('✅ WhatsApp conectado');
     }
 
     if (connection === 'close') {
-      isConnected = false
       const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
+        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
 
-      if (shouldReconnect) startWhatsApp()
+      connectionStatus = 'disconnected';
+      console.log('❌ Conexão fechada. Reconnect:', shouldReconnect);
+
+      if (shouldReconnect) {
+        startWhatsApp();
+      }
     }
-  })
+  });
+
+  sock.ev.on('creds.update', saveCreds);
 }
 
-export function getStatus() {
-  return { connected: isConnected, qr: qrCode }
+function getQR() {
+  return qrCode;
 }
 
-export async function sendMessage(number, message) {
-  if (!sock || !isConnected) throw new Error('WhatsApp não conectado')
-
-  const jid = number.includes('@s.whatsapp.net')
-    ? number
-    : `${number}@s.whatsapp.net`
-
-  await sock.sendMessage(jid, { text: message })
+function getStatus() {
+  return connectionStatus;
 }
+
+module.exports = {
+  startWhatsApp,
+  getQR,
+  getStatus
+};
