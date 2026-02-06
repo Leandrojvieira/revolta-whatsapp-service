@@ -7,8 +7,11 @@
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.8",
-    "express": "^4.19.2",
     "cors": "^2.8.5",
+    "express": "^4.19.2",
     "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@flydotio/dockerfile": "^0.7.10"
   }
 }
