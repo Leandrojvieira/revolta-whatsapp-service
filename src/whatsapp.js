@@ -1,58 +1,36 @@
-import makeWASocket, {
-  DisconnectReason,
-  useMultiFileAuthState
-} from '@whiskeysockets/baileys'
-
-import fs from 'fs'
+import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys'
 
 let sock = null
-let qrCode = null
-let isConnected = false
-let initializing = false
+let lastConnection = { connected: false }
 
-const AUTH_PATH = '/app/data/baileys-auth'
+const AUTH_DIR = '/app/data/auth'
 
 export async function initWhatsApp() {
-  if (initializing || sock) return
-  initializing = true
-
-  if (!fs.existsSync(AUTH_PATH)) {
-    fs.mkdirSync(AUTH_PATH, { recursive: true })
-  }
-
-  const { state, saveCreds } = await useMultiFileAuthState(AUTH_PATH)
+  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR)
 
   sock = makeWASocket({
     auth: state,
-    printQRInTerminal: false
+    printQRInTerminal: false,
+    browser: ['Chrome', 'Desktop', '1.0.0']
   })
 
   sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect, qr } = update
-
-    if (qr) {
-      qrCode = qr
-      console.log('📱 QR gerado')
-    }
+    const { connection, lastDisconnect } = update
 
     if (connection === 'open') {
-      isConnected = true
-      qrCode = null
+      lastConnection.connected = true
       console.log('✅ WhatsApp conectado')
     }
 
     if (connection === 'close') {
-      isConnected = false
+      lastConnection.connected = false
       const shouldReconnect =
         lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
 
       console.log('❌ Conexão fechada. Reconnect:', shouldReconnect)
 
-      sock = null
-      initializing = false
-
       if (shouldReconnect) {
-        setTimeout(initWhatsApp, 3000)
+        initWhatsApp()
       }
     }
   })
@@ -60,13 +38,14 @@ export async function initWhatsApp() {
   sock.ev.on('creds.update', saveCreds)
 }
 
-export function getQR() {
-  return qrCode
+export async function getPairingCode(phone) {
+  if (!sock) throw new Error('WhatsApp não inicializado')
+
+  const cleanPhone = phone.replace(/\D/g, '')
+  const code = await sock.requestPairingCode(cleanPhone)
+  return code
 }
 
 export function getStatus() {
-  return {
-    connected: isConnected,
-    hasQR: !!qrCode
-  }
+  return { connected: lastConnection.connected }
 }

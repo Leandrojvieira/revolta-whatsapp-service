@@ -1,6 +1,6 @@
 import express from 'express'
 import cors from 'cors'
-import { initWhatsApp, getQR, getStatus } from './whatsapp.js'
+import { initWhatsApp, getPairingCode, getStatus } from './whatsapp.js'
 
 const app = express()
 app.use(cors())
@@ -16,12 +16,16 @@ app.get('/whatsapp/status', (req, res) => {
   res.json(getStatus())
 })
 
-app.get('/whatsapp/qr', (req, res) => {
-  const qr = getQR()
-  if (!qr) {
-    return res.status(404).json({ message: 'QR não disponível' })
+app.post('/whatsapp/pair', async (req, res) => {
+  const { phone } = req.body
+  if (!phone) return res.status(400).json({ error: 'Telefone obrigatório' })
+
+  try {
+    const code = await getPairingCode(phone)
+    res.json({ code })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
   }
-  res.json({ qr })
 })
 
 const PORT = process.env.PORT || 3001
