@@ -1,8 +1,9 @@
 import express from 'express';
 import cors from 'cors';
-import { initWhatsApp, getQR } from './whatsapp.js';
+import { initWhatsApp, getQR, getStatus } from './whatsapp.js';
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
@@ -12,12 +13,24 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.get('/qr', (req, res) => {
+app.get('/whatsapp/status', (req, res) => {
+  res.json(getStatus());
+});
+
+app.get('/whatsapp/qr', (req, res) => {
   const qr = getQR();
+
   if (!qr) {
-    return res.status(404).json({ message: 'QR não disponível' });
+    return res.status(200).json({
+      connected: true,
+      message: 'WhatsApp já conectado',
+    });
   }
-  res.json({ qr });
+
+  res.json({
+    connected: false,
+    qr,
+  });
 });
 
 const PORT = process.env.PORT || 3001;
