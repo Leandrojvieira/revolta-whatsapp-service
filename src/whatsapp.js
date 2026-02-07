@@ -1,67 +1,33 @@
-import makeWASocket, {
-  useMultiFileAuthState,
-  DisconnectReason
-} from '@whiskeysockets/baileys';
-
+import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
 import fs from 'fs';
 
-let sock;
-let pairingCode = null;
-let isConnected = false;
+let sock = null;
+let pairingInProgress = false;
 
-export async function initWhatsApp() {
-  const authDir = '/app/data/auth';
-
-  if (!fs.existsSync(authDir)) {
-    fs.mkdirSync(authDir, { recursive: true });
+export async function startPairing(phoneNumber) {
+  if (pairingInProgress) {
+    throw new Error('Pairing já em andamento');
   }
 
-  const { state, saveCreds } = await useMultiFileAuthState(authDir);
+  pairingInProgress = true;
+
+  const authPath = './data/auth';
+  if (!fs.existsSync(authPath)) {
+    fs.mkdirSync(authPath, { recursive: true });
+  }
+
+  const { state, saveCreds } = await useMultiFileAuthState(authPath);
 
   sock = makeWASocket({
     auth: state,
     printQRInTerminal: false,
-    browser: ['ReVolta', 'Chrome', '1.0']
+    browser: ['ReVolta', 'Chrome', '1.0'],
   });
 
   sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect } = update;
+  const code = await sock.requestPairingCode(phoneNumber);
 
-    if (connection === 'open') {
-      console.log('✅ WhatsApp conectado');
-      isConnected = true;
-      pairingCode = null;
-    }
-
-    if (connection === 'close') {
-      isConnected = false;
-      const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-
-      console.log('❌ Conexão fechada. Reconnect:', shouldReconnect);
-
-      if (shouldReconnect) {
-        setTimeout(initWhatsApp, 3000);
-      }
-    }
-  });
-}
-
-export async function generatePairingCode(phone) {
-  if (!sock) {
-    throw new Error('WhatsApp não inicializado');
-  }
-
-  const code = await sock.requestPairingCode(phone);
-  pairingCode = code;
+  pairingInProgress = false;
   return code;
-}
-
-export function getStatus() {
-  return {
-    connected: isConnected,
-    hasPairingCode: !!pairingCode
-  };
 }
