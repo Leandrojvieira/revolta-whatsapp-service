@@ -1,57 +1,72 @@
-import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
-import Pino from 'pino';
+import makeWASocket, {
+  DisconnectReason,
+  useMultiFileAuthState
+} from '@whiskeysockets/baileys'
 
-let sock = null;
-let currentQR = null;
-let connected = false;
+import fs from 'fs'
+
+let sock = null
+let qrCode = null
+let isConnected = false
+let initializing = false
+
+const AUTH_PATH = '/app/data/baileys-auth'
 
 export async function initWhatsApp() {
-  const { state, saveCreds } = await useMultiFileAuthState('/data/auth');
+  if (initializing || sock) return
+  initializing = true
+
+  if (!fs.existsSync(AUTH_PATH)) {
+    fs.mkdirSync(AUTH_PATH, { recursive: true })
+  }
+
+  const { state, saveCreds } = await useMultiFileAuthState(AUTH_PATH)
 
   sock = makeWASocket({
-    logger: Pino({ level: 'silent' }),
     auth: state,
-    printQRInTerminal: false,
-  });
+    printQRInTerminal: false
+  })
 
   sock.ev.on('connection.update', (update) => {
-    const { connection, qr } = update;
+    const { connection, lastDisconnect, qr } = update
 
     if (qr) {
-      console.log('📱 QR gerado');
-      currentQR = qr;
-      connected = false;
+      qrCode = qr
+      console.log('📱 QR gerado')
     }
 
     if (connection === 'open') {
-      console.log('✅ WhatsApp conectado');
-      currentQR = null;
-      connected = true;
+      isConnected = true
+      qrCode = null
+      console.log('✅ WhatsApp conectado')
     }
 
     if (connection === 'close') {
-      connected = false;
+      isConnected = false
       const shouldReconnect =
-        update.lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
 
-      console.log('❌ Conexão fechada. Reconnect:', shouldReconnect);
+      console.log('❌ Conexão fechada. Reconnect:', shouldReconnect)
+
+      sock = null
+      initializing = false
 
       if (shouldReconnect) {
-        initWhatsApp();
+        setTimeout(initWhatsApp, 3000)
       }
     }
-  });
+  })
 
-  sock.ev.on('creds.update', saveCreds);
+  sock.ev.on('creds.update', saveCreds)
 }
 
 export function getQR() {
-  return currentQR;
+  return qrCode
 }
 
 export function getStatus() {
   return {
-    connected,
-    hasQR: !!currentQR,
-  };
+    connected: isConnected,
+    hasQR: !!qrCode
+  }
 }

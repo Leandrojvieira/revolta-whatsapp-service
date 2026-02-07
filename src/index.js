@@ -1,39 +1,30 @@
-import express from 'express';
-import cors from 'cors';
-import { initWhatsApp, getQR, getStatus } from './whatsapp.js';
+import express from 'express'
+import cors from 'cors'
+import { initWhatsApp, getQR, getStatus } from './whatsapp.js'
 
-const app = express();
+const app = express()
+app.use(cors())
+app.use(express.json())
 
-app.use(cors());
-app.use(express.json());
-
-initWhatsApp();
+initWhatsApp()
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
-});
+  res.json({ status: 'ok' })
+})
 
 app.get('/whatsapp/status', (req, res) => {
-  res.json(getStatus());
-});
+  res.json(getStatus())
+})
 
 app.get('/whatsapp/qr', (req, res) => {
-  const qr = getQR();
-
+  const qr = getQR()
   if (!qr) {
-    return res.status(200).json({
-      connected: true,
-      message: 'WhatsApp já conectado',
-    });
+    return res.status(404).json({ message: 'QR não disponível' })
   }
+  res.json({ qr })
+})
 
-  res.json({
-    connected: false,
-    qr,
-  });
-});
-
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
-  console.log(`🚀 WhatsApp Service rodando na porta ${PORT}`);
-});
+  console.log(`🚀 WhatsApp Service rodando na porta ${PORT}`)
+})
