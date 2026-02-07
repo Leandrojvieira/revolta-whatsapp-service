@@ -1,34 +1,44 @@
-import express from 'express'
-import cors from 'cors'
-import { initWhatsApp, getPairingCode, getStatus } from './whatsapp.js'
+import express from 'express';
+import cors from 'cors';
+import {
+  initWhatsApp,
+  generatePairingCode,
+  getStatus
+} from './whatsapp.js';
 
-const app = express()
-app.use(cors())
-app.use(express.json())
+const app = express();
 
-initWhatsApp()
+app.use(cors());
+app.use(express.json());
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' })
-})
+initWhatsApp();
 
-app.get('/whatsapp/status', (req, res) => {
-  res.json(getStatus())
-})
+app.get('/health', (_, res) => {
+  res.json({ status: 'ok' });
+});
 
-app.post('/whatsapp/pair', async (req, res) => {
-  const { phone } = req.body
-  if (!phone) return res.status(400).json({ error: 'Telefone obrigatório' })
+app.get('/status', (_, res) => {
+  res.json(getStatus());
+});
 
+app.post('/pairing-code', async (req, res) => {
   try {
-    const code = await getPairingCode(phone)
-    res.json({ code })
-  } catch (err) {
-    res.status(500).json({ error: err.message })
-  }
-})
+    const { phone } = req.body;
 
-const PORT = process.env.PORT || 3001
+    if (!phone) {
+      return res.status(400).json({ message: 'Telefone obrigatório' });
+    }
+
+    const code = await generatePairingCode(phone);
+
+    res.json({ code });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Erro ao gerar código' });
+  }
+});
+
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`🚀 WhatsApp Service rodando na porta ${PORT}`)
-})
+  console.log(`🚀 WhatsApp Service rodando na porta ${PORT}`);
+});

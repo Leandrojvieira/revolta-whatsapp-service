@@ -1,51 +1,67 @@
-import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys'
+import makeWASocket, {
+  useMultiFileAuthState,
+  DisconnectReason
+} from '@whiskeysockets/baileys';
 
-let sock = null
-let lastConnection = { connected: false }
+import fs from 'fs';
 
-const AUTH_DIR = '/app/data/auth'
+let sock;
+let pairingCode = null;
+let isConnected = false;
 
 export async function initWhatsApp() {
-  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR)
+  const authDir = '/app/data/auth';
+
+  if (!fs.existsSync(authDir)) {
+    fs.mkdirSync(authDir, { recursive: true });
+  }
+
+  const { state, saveCreds } = await useMultiFileAuthState(authDir);
 
   sock = makeWASocket({
     auth: state,
     printQRInTerminal: false,
-    browser: ['Chrome', 'Desktop', '1.0.0']
-  })
+    browser: ['ReVolta', 'Chrome', '1.0']
+  });
+
+  sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect } = update
+    const { connection, lastDisconnect } = update;
 
     if (connection === 'open') {
-      lastConnection.connected = true
-      console.log('✅ WhatsApp conectado')
+      console.log('✅ WhatsApp conectado');
+      isConnected = true;
+      pairingCode = null;
     }
 
     if (connection === 'close') {
-      lastConnection.connected = false
+      isConnected = false;
       const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
+        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
 
-      console.log('❌ Conexão fechada. Reconnect:', shouldReconnect)
+      console.log('❌ Conexão fechada. Reconnect:', shouldReconnect);
 
       if (shouldReconnect) {
-        initWhatsApp()
+        setTimeout(initWhatsApp, 3000);
       }
     }
-  })
-
-  sock.ev.on('creds.update', saveCreds)
+  });
 }
 
-export async function getPairingCode(phone) {
-  if (!sock) throw new Error('WhatsApp não inicializado')
+export async function generatePairingCode(phone) {
+  if (!sock) {
+    throw new Error('WhatsApp não inicializado');
+  }
 
-  const cleanPhone = phone.replace(/\D/g, '')
-  const code = await sock.requestPairingCode(cleanPhone)
-  return code
+  const code = await sock.requestPairingCode(phone);
+  pairingCode = code;
+  return code;
 }
 
 export function getStatus() {
-  return { connected: lastConnection.connected }
+  return {
+    connected: isConnected,
+    hasPairingCode: !!pairingCode
+  };
 }
